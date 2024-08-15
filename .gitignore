@@ -1,2 +1,8 @@
 main
 future
+# All of my nsys stats outputs start with out
+out*
+# All of my nsys profile outputs start with chk
+chk*
+# All of my nsys profile outputs dump to stdout also
+stdout*
