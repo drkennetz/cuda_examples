@@ -33,7 +33,7 @@ void doMatMul(float* out, const float* in1, const float* in2, int width) {
     dim3 blocksPerGrid((width + threadsPerBlock.x - 1) / threadsPerBlock.x,
                         (width + threadsPerBlock.y - 1) / threadsPerBlock.y);
     printf("Launching kernel...\n");
-    for (int j = 0; j < 10; ++j)
+    for (int j = 0; j < 100; ++j)
     {
         nvtxRangePush("Matrix multiplication kernel");
         matMul<<<blocksPerGrid, threadsPerBlock>>>(dOut, dIn1, dIn2, width);

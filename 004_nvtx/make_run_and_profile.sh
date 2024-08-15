@@ -4,7 +4,7 @@
 make clean
 make
 rm -rf chk* out*
-nsys profile -o chk --stats=true --gpu-metrics-device=all ./main > stdout.dump
+nsys profile -o chk --stats=true --gpu-metrics-device=all ./main
 nsys stats -f csv -o out chk.sqlite
 
 # remove empties
