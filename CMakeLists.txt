@@ -6,9 +6,6 @@ function(ConfigureCUDAExample CMAKE_CUDA_EXAMPLE_NAME)
   target_compile_options(
     ${CMAKE_CUDA_EXAMPLE_NAME} 
     PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--extended-lambda>) 
-  install(TARGETS ${CMAKE_CUDA_EXAMPLE_NAME}
-    OBJECTS DESTINATION bin/ 
-  )
 endfunction()
 
 ConfigureCUDAExample(setup_check 001_setup_check/hello_world.cu)
