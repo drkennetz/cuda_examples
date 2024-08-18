@@ -3,6 +3,7 @@ project(cuda_examples LANGUAGES CXX CUDA)
 
 function(ConfigureCUDAExample CMAKE_CUDA_EXAMPLE_NAME)
   add_executable(${CMAKE_CUDA_EXAMPLE_NAME} ${ARGN})
+  target_link_libraries(${CMAKE_CUDA_EXAMPLE_NAME} PRIVATE nvToolsExt)
   target_compile_options(
     ${CMAKE_CUDA_EXAMPLE_NAME} 
     PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--extended-lambda>) 
