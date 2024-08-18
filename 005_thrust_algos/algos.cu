@@ -32,4 +32,15 @@ int main() {
         );
         print_vector(d_vec);
     }
+
+    // Sequence
+    {
+        thrust::device_vector<int> d_vec(10);
+        thrust::sequence(
+            thrust::device,
+            d_vec.begin(),
+            d_vec.end()
+        );  
+        print_vector(d_vec);
+    }
 }
