@@ -6,3 +6,9 @@ out*
 chk*
 # All of my nsys profile outputs dump to stdout also
 stdout*
+# CMake files
+CMakeCache.txt
+cmake_install.cmake
+CMakeFiles/
+# Build dir
+build/
