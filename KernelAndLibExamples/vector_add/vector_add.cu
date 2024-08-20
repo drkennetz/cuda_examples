@@ -52,6 +52,8 @@ int main() {
     // Copy the result device vector into the result host vector
     cudaMemcpy(v3, d_v3, size, cudaMemcpyDeviceToHost);
 
+    cudaDeviceSynchronize();
+
     // Verify the result host vector
     for (int i = 0; i < N; i++) {
         assert(v3[i] == (float)9.9);

@@ -12,7 +12,7 @@ constexpr size_t DEFAULT_DATA_SIZE = 1 << 24; // 16M floats
 
 void checkBandwidth(size_t dataSize, int numCopyIterations, int numStreams, int warmupIterations) {
     // Allocate pinned host memory.
-    float* hData;
+    float *hData;
     ::cudaHostAlloc(&hData, dataSize * sizeof(float), cudaHostAllocDefault);
 
     // Populate the host array with values.
@@ -21,7 +21,7 @@ void checkBandwidth(size_t dataSize, int numCopyIterations, int numStreams, int 
     }
 
     // Allocate device memory.
-    float* dData;
+    float *dData;
     ::cudaMalloc(&dData, dataSize * sizeof(float));
 
     // Create CUDA events for timing purposes.
