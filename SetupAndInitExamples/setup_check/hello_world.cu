@@ -27,7 +27,7 @@ int main()
            2.0*prop.memoryClockRate*(prop.memoryBusWidth/8)/1.0e6);
     printf("  Total global memory (Gbytes) %.1f\n",(float)(prop.totalGlobalMem)/1024.0/1024.0/1024.0);
     printf("  Shared memory per block (Kbytes) %.1f\n",(float)(prop.sharedMemPerBlock)/1024.0);
-    printf("  minor-major: %d-%d\n", prop.minor, prop.major);
+    printf("  major-minor: %d-%d\n", prop.major, prop.minor);
     printf("  Warp-size: %d\n", prop.warpSize);
     printf("  Concurrent kernels: %s\n", prop.concurrentKernels ? "yes" : "no");
     printf("  Concurrent computation/communication: %s\n\n",prop.deviceOverlap ? "yes" : "no");

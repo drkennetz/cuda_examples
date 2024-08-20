@@ -3,7 +3,6 @@
 #include <thrust/device_vector.h>
 #include <thrust/copy.h>
 #include <thrust/random.h>
-#include <nvToolsExt.h>
 #include <iostream>
 
 // Kernel to intialize weights with random values.
