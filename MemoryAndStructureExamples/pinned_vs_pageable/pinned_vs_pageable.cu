@@ -21,7 +21,7 @@
     }
 #endif  // cudaCheckError
 
-
+// Simple kernel for use.
 __global__ void vector_add_kernel(float *d_v1, float *d_v2, float *d_v3, int n) {
     int i = blockDim.x * blockIdx.x + threadIdx.x;
     if (i < n) {
@@ -40,12 +40,13 @@ void benchmark(int N, bool usePinnedMemory) {
     size_t size = N * sizeof(float);
     Memory mem;
     
-    // Allocate memory
+    // Allocate host-pinned memory.
     if (usePinnedMemory) {
         cudaCheckError(cudaMallocHost(&mem.v1, size));
         cudaCheckError(cudaMallocHost(&mem.v2, size));
         cudaCheckError(cudaMallocHost(&mem.v3, size));
     } else {
+        // Allocate pageable memory.
         mem.v1 = (float*)malloc(size);
         mem.v2 = (float*)malloc(size);
         mem.v3 = (float*)malloc(size);
@@ -120,6 +121,10 @@ void benchmark(int N, bool usePinnedMemory) {
 }
 
 int main() {
+    // Small, to fairly large memory pushes:
+    // 1024 * 4 bytes = 4KB
+    // 1024 * 1024 * 4 bytes = 4MB
+    // 10 * 1024 * 1024 * 4 bytes = 40MB
     std::vector<int> sizes = {1024, 1024 * 1024, 10 * 1024 * 1024};
     
     for (int N : sizes) {

@@ -22,6 +22,8 @@ ConfigureCUDAExample(simple_thrust KernelAndLibExamples/simple_thrust/simple_thr
 ConfigureCUDAExample(bandwidth_check ProfilingExamples/bandwidth_check/bandwidth_check.cu)
 ConfigureCUDAExample(nvtx_example ProfilingExamples/nvtx/nvtx_example.cu)
 ConfigureCUDAExample(vector_add KernelAndLibExamples/vector_add/vector_add.cu)
+ConfigureCUDAExample(alloc_init_vs_alloc_uninit MemoryAndStructureExamples/alloc_init_vs_alloc_uninit/alloc_init_vs_alloc_uninit.cu)
+ConfigureCUDAExample(pinned_vs_pageable MemoryAndStructureExamples/pinned_vs_pageable/pinned_vs_pageable.cu)
 
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/ProfilingExamples/nvtx/make_run_and_profile.sh
