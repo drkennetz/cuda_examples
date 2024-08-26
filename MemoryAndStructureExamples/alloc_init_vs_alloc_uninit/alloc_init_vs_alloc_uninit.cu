@@ -4,6 +4,7 @@
 #include <thrust/copy.h>
 #include <thrust/random.h>
 #include <iostream>
+#include "../../utils/utils.cuh"
 
 // Kernel to intialize weights with random values.
 __global__ void initializeWeightsKernel(float* weights, int size, unsigned long seed) {
@@ -20,13 +21,13 @@ void initializeWeightsCudaMalloc(int size) {
 
     float* d_weights;
     // Allocate memory for distribution, but don't initialize values until kernel
-    cudaMalloc(&d_weights, size * sizeof(float));
+    cudaCheckError(::cudaMalloc(&d_weights, size * sizeof(float)));
 
     // Launch kernel to initialize weights
     initializeWeightsKernel<<<(size + 255) / 256, 256>>>(d_weights, size, time(NULL));
-    cudaDeviceSynchronize();
+    cudaCheckError(::cudaDeviceSynchronize());
 
-    cudaFree(d_weights);
+    cudaCheckError(::cudaFree(d_weights));
 
     std::cout << "Initialized weights using cudaMalloc." << std::endl;
 }

@@ -1,25 +1,8 @@
-#include <cuda_runtime.h>
 #include <chrono>
 #include <iostream>
 #include <vector>
-
-// Move this out to top level.
-#ifndef cudaCheckError
-#define cudaCheckError(call)                                                                                           \
-    {                                                                                                                  \
-        auto status = static_cast<cudaError_t>( call );                                                                \
-        if ( status != cudaSuccess )                                                                                   \
-            fprintf( stderr,                                                                                           \
-                     "ERROR: CUDA RT call \"%s\" in line %d of file %s failed "                                        \
-                     "with "                                                                                           \
-                     "%s (%d).\n",                                                                                     \
-                     #call,                                                                                            \
-                     __LINE__,                                                                                         \
-                     __FILE__,                                                                                         \
-                     cudaGetErrorString( status ),                                                                     \
-                     status );                                                                                         \
-    }
-#endif  // cudaCheckError
+#include <cuda_runtime.h>
+#include "../../utils/utils.cuh"
 
 // Simple kernel for use.
 __global__ void vector_add_kernel(float *d_v1, float *d_v2, float *d_v3, int n) {
@@ -42,9 +25,9 @@ void benchmark(int N, bool usePinnedMemory) {
     
     // Allocate host-pinned memory.
     if (usePinnedMemory) {
-        cudaCheckError(cudaMallocHost(&mem.v1, size));
-        cudaCheckError(cudaMallocHost(&mem.v2, size));
-        cudaCheckError(cudaMallocHost(&mem.v3, size));
+        cudaCheckError(::cudaMallocHost(&mem.v1, size));
+        cudaCheckError(::cudaMallocHost(&mem.v2, size));
+        cudaCheckError(::cudaMallocHost(&mem.v3, size));
     } else {
         // Allocate pageable memory.
         mem.v1 = (float*)malloc(size);
@@ -60,25 +43,25 @@ void benchmark(int N, bool usePinnedMemory) {
 
     // Allocate device memory
     float *d_v1, *d_v2, *d_v3;
-    cudaCheckError(cudaMalloc(&d_v1, size));
-    cudaCheckError(cudaMalloc(&d_v2, size));
-    cudaCheckError(cudaMalloc(&d_v3, size));
+    cudaCheckError(::cudaMalloc(&d_v1, size));
+    cudaCheckError(::cudaMalloc(&d_v2, size));
+    cudaCheckError(::cudaMalloc(&d_v3, size));
 
     // Create CUDA stream
     cudaStream_t stream;
-    cudaCheckError(cudaStreamCreate(&stream));
+    cudaCheckError(::cudaStreamCreate(&stream));
 
     // Create CUDA events for timing
     cudaEvent_t start, stop;
-    cudaCheckError(cudaEventCreate(&start));
-    cudaCheckError(cudaEventCreate(&stop));
+    cudaCheckError(::cudaEventCreate(&start));
+    cudaCheckError(::cudaEventCreate(&stop));
 
     // Record start time
-    cudaCheckError(cudaEventRecord(start, stream));
+    cudaCheckError(::cudaEventRecord(start, stream));
 
     // Asynchronous memory transfers
-    cudaCheckError(cudaMemcpyAsync(d_v1, mem.v1, size, cudaMemcpyHostToDevice, stream));
-    cudaCheckError(cudaMemcpyAsync(d_v2, mem.v2, size, cudaMemcpyHostToDevice, stream));
+    cudaCheckError(::cudaMemcpyAsync(d_v1, mem.v1, size, cudaMemcpyHostToDevice, stream));
+    cudaCheckError(::cudaMemcpyAsync(d_v2, mem.v2, size, cudaMemcpyHostToDevice, stream));
 
     // Launch kernel
     int threadsPerBlock = 256;
@@ -86,14 +69,14 @@ void benchmark(int N, bool usePinnedMemory) {
     vector_add_kernel<<<blocksPerGrid, threadsPerBlock, 0, stream>>>(d_v1, d_v2, d_v3, N);
 
     // Asynchronous memory transfer back to host
-    cudaCheckError(cudaMemcpyAsync(mem.v3, d_v3, size, cudaMemcpyDeviceToHost, stream));
+    cudaCheckError(::cudaMemcpyAsync(mem.v3, d_v3, size, cudaMemcpyDeviceToHost, stream));
 
     // Record stop time
-    cudaCheckError(cudaEventRecord(stop, stream));
-    cudaCheckError(cudaEventSynchronize(stop));
+    cudaCheckError(::cudaEventRecord(stop, stream));
+    cudaCheckError(::cudaEventSynchronize(stop));
 
     float milliseconds = 0;
-    cudaCheckError(cudaEventElapsedTime(&milliseconds, start, stop));
+    cudaCheckError(::cudaEventElapsedTime(&milliseconds, start, stop));
 
     // Calculate bandwidth
     float bandwidth = 3 * size / (milliseconds / 1000) / 1e9; // GB/s
@@ -102,17 +85,17 @@ void benchmark(int N, bool usePinnedMemory) {
               << ", Time: " << milliseconds << " ms, Bandwidth: " << bandwidth << " GB/s" << std::endl;
 
     // Clean up
-    cudaCheckError(cudaFree(d_v1));
-    cudaCheckError(cudaFree(d_v2));
-    cudaCheckError(cudaFree(d_v3));
-    cudaCheckError(cudaStreamDestroy(stream));
-    cudaCheckError(cudaEventDestroy(start));
-    cudaCheckError(cudaEventDestroy(stop));
+    cudaCheckError(::cudaFree(d_v1));
+    cudaCheckError(::cudaFree(d_v2));
+    cudaCheckError(::cudaFree(d_v3));
+    cudaCheckError(::cudaStreamDestroy(stream));
+    cudaCheckError(::cudaEventDestroy(start));
+    cudaCheckError(::cudaEventDestroy(stop));
 
     if (usePinnedMemory) {
-        cudaCheckError(cudaFreeHost(mem.v1));
-        cudaCheckError(cudaFreeHost(mem.v2));
-        cudaCheckError(cudaFreeHost(mem.v3));
+        cudaCheckError(::cudaFreeHost(mem.v1));
+        cudaCheckError(::cudaFreeHost(mem.v2));
+        cudaCheckError(::cudaFreeHost(mem.v3));
     } else {
         free(mem.v1);
         free(mem.v2);

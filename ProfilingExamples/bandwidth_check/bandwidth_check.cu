@@ -3,6 +3,7 @@
 #include <getopt.h>
 #include <cuda_runtime.h>
 #include <vector>
+#include "../../utils/utils.cuh"
 
 // Default values
 constexpr int DEFAULT_NUM_COPY_ITERATIONS = 1000;
@@ -10,10 +11,16 @@ constexpr int DEFAULT_NUM_STREAMS = 4;
 constexpr int DEFAULT_WARMUP_ITERATIONS = 10;
 constexpr size_t DEFAULT_DATA_SIZE = 1 << 24; // 16M floats
 
-void checkBandwidth(size_t dataSize, int numCopyIterations, int numStreams, int warmupIterations) {
+void checkBandwidth(const size_t dataSize, const int numCopyIterations, const int numStreams, const int warmupIterations) {
+    printf("Starting bandwidth check with:\n"
+           "dataSize: %zu\n"
+           "warmupIterations: %d\n"
+           "numCopyIterations: %d\n"
+           "numStreams: %d\n",
+           dataSize, warmupIterations, numCopyIterations, numStreams);
     // Allocate pinned host memory.
     float *hData;
-    ::cudaHostAlloc(&hData, dataSize * sizeof(float), cudaHostAllocDefault);
+    cudaCheckError(::cudaHostAlloc(&hData, dataSize * sizeof(float), cudaHostAllocDefault));
 
     // Populate the host array with values.
     for (size_t i = 0; i < dataSize; ++i) {
@@ -22,51 +29,51 @@ void checkBandwidth(size_t dataSize, int numCopyIterations, int numStreams, int 
 
     // Allocate device memory.
     float *dData;
-    ::cudaMalloc(&dData, dataSize * sizeof(float));
+    cudaCheckError(::cudaMalloc(&dData, dataSize * sizeof(float)));
 
     // Create CUDA events for timing purposes.
     cudaEvent_t start, stop;
-    ::cudaEventCreate(&start);
-    ::cudaEventCreate(&stop);
+    cudaCheckError(::cudaEventCreate(&start));
+    cudaCheckError(::cudaEventCreate(&stop));
 
     // Create multiple CUDA streams.
     std::vector<cudaStream_t> streams(numStreams);
     for (int i = 0; i < numStreams; ++i) {
-        ::cudaStreamCreate(&streams[i]);
+        cudaCheckError(::cudaStreamCreate(&streams[i]));
     }
 
     // Perform warm-up iterations to stabilize performance.
     for (int i = 0; i < warmupIterations; ++i) {
         int streamIndex = i % numStreams;
-        ::cudaMemcpyAsync(dData, hData, dataSize * sizeof(float), cudaMemcpyHostToDevice, streams[streamIndex]);
+        cudaCheckError(::cudaMemcpyAsync(dData, hData, dataSize * sizeof(float), cudaMemcpyHostToDevice, streams[streamIndex]));
     }
     for (int i = 0; i < numStreams; ++i) {
-        ::cudaStreamSynchronize(streams[i]);
+        cudaCheckError(::cudaStreamSynchronize(streams[i]));
     }
 
     // Record the start event.
-    ::cudaEventRecord(start);
+    cudaCheckError(::cudaEventRecord(start));
 
     // Perform data transfers using multiple streams.
     for (int i = 0; i < numCopyIterations; ++i) {
         int streamIndex = i % numStreams;
-        ::cudaMemcpyAsync(dData, hData, dataSize * sizeof(float), cudaMemcpyHostToDevice, streams[streamIndex]);
+        cudaCheckError(::cudaMemcpyAsync(dData, hData, dataSize * sizeof(float), cudaMemcpyHostToDevice, streams[streamIndex]));
     }
 
     // Sync all streams to ensure copy complete.
     for (int i = 0; i < numStreams; ++i) {
-        ::cudaStreamSynchronize(streams[i]);
+        cudaCheckError(::cudaStreamSynchronize(streams[i]));
     }
 
     // Record the stop event.
-    ::cudaEventRecord(stop);
+    cudaCheckError(::cudaEventRecord(stop));
 
     // Wait for the stop event to complete.
-    ::cudaEventSynchronize(stop);
+    cudaCheckError(::cudaEventSynchronize(stop));
 
     // Calculate the elapsed time.
     float ms = 0;
-    ::cudaEventElapsedTime(&ms, start, stop);
+    cudaCheckError(::cudaEventElapsedTime(&ms, start, stop));
 
     // Check if ms is zero to avoid division by zero.
     if (ms > 0) {
@@ -78,13 +85,13 @@ void checkBandwidth(size_t dataSize, int numCopyIterations, int numStreams, int 
     }
 
     // Clean up.
-    ::cudaFree(dData);
-    ::cudaFreeHost(hData);
+    cudaCheckError(::cudaFree(dData));
+    cudaCheckError(::cudaFreeHost(hData));
     for (int i = 0; i < numStreams; ++i) {
-        ::cudaStreamDestroy(streams[i]);
+        cudaCheckError(::cudaStreamDestroy(streams[i]));
     }
-    ::cudaEventDestroy(start);
-    ::cudaEventDestroy(stop);
+    cudaCheckError(::cudaEventDestroy(start));
+    cudaCheckError(::cudaEventDestroy(stop));
 }
 
 int main(int argc, char* argv[]) {
@@ -122,7 +129,6 @@ int main(int argc, char* argv[]) {
                 exit(EXIT_FAILURE);
         }
     }
-
     checkBandwidth(dataSize, numCopyIterations, numStreams, warmupIterations);
     return 0;
 }

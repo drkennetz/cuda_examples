@@ -1,6 +1,7 @@
 #include <cstdio>
 #include <cuda_runtime.h>
 #include <nvToolsExt.h>
+#include "../../utils/utils.cuh"
 
 #define W 1024
 
@@ -21,13 +22,13 @@ void doMatMul(float* out, const float* in1, const float* in2, int width) {
     const size_t size = width * width * sizeof(float);
 
     printf("Allocating device memory...\n");
-    cudaMalloc(&dIn1, size);
-    cudaMalloc(&dIn2, size);
-    cudaMalloc(&dOut, size);
+    cudaCheckError(::cudaMalloc(&dIn1, size));
+    cudaCheckError(::cudaMalloc(&dIn2, size));
+    cudaCheckError(::cudaMalloc(&dOut, size));
 
     printf("Copying data to device...\n");
-    cudaMemcpy(dIn1, in1, size, cudaMemcpyHostToDevice);
-    cudaMemcpy(dIn2, in2, size, cudaMemcpyHostToDevice);
+    cudaCheckError(::cudaMemcpy(dIn1, in1, size, cudaMemcpyHostToDevice));
+    cudaCheckError(::cudaMemcpy(dIn2, in2, size, cudaMemcpyHostToDevice));
 
     dim3 threadsPerBlock(16, 16);
     dim3 blocksPerGrid((width + threadsPerBlock.x - 1) / threadsPerBlock.x,
@@ -39,23 +40,23 @@ void doMatMul(float* out, const float* in1, const float* in2, int width) {
         matMul<<<blocksPerGrid, threadsPerBlock>>>(dOut, dIn1, dIn2, width);
         nvtxRangePop();
     }
-    cudaDeviceSynchronize();
+    cudaCheckError(::cudaDeviceSynchronize());
 
     printf("Copying result to host...\n");
-    cudaMemcpy(out, dOut, size, cudaMemcpyHostToDevice);
+    cudaCheckError(::cudaMemcpy(out, dOut, size, cudaMemcpyHostToDevice));
 
     printf("Freeing device memory...\n");
-    cudaFree(dIn1);
-    cudaFree(dIn2);
-    cudaFree(dOut);
+    cudaCheckError(::cudaFree(dIn1));
+    cudaCheckError(::cudaFree(dIn2));
+    cudaCheckError(::cudaFree(dOut));
 }
 
 int main() {
     float *in1, *in2, *out;
     const size_t width = W * W * sizeof(float);
-    in1 = (float*)malloc(width);
-    in2 = (float*)malloc(width);
-    out = (float*)malloc(width);
+    cudaCheckError(::cudaMallocHost(&in1, width));
+    cudaCheckError(::cudaMallocHost(&in2, width));
+    cudaCheckError(::cudaMallocHost(&out, width));
     for (int i = 0; i < W * W; ++i) {
         in1[i] = static_cast<float>(rand()) / RAND_MAX;
         in2[i] = static_cast<float>(rand()) / RAND_MAX;
@@ -64,8 +65,8 @@ int main() {
     doMatMul(out, in1, in2, width);
     printf("Matrix multiplication completed.\n");
     printf("Freeing host memory...\n");
-    free(in1);
-    free(in2);
-    free(out);
+    cudaCheckError(::cudaFreeHost(in1));
+    cudaCheckError(::cudaFreeHost(in2));
+    cudaCheckError(::cudaFreeHost(out));
     return 0;
 }

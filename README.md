@@ -23,7 +23,9 @@ As sort of a sub-section of contributions, I'd like to cover conventions to use:
 - Each example should have its own subdirectory under the appropriate section
 - If your example produces output, it should run as a bash script and the output files should be added to `.gitignore`
 - All executables should be called `main` (this is also for `.gitignore`)
-- All examples should work with C++20. 
+- All examples should work with C++20.
+- Each example should include `utils/utils.cuh`, and each CUDA call that returns a `cudaError_t` should be wrapped with a `cudaCheckError` like `cudaCheckError(::cudaDeviceSynchronize());`.
+- Each CUDA API call should be prefixed with `::` to inform the reader that it is an external API call. See example above.
 
 ## Building Instructions
 
