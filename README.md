@@ -9,6 +9,7 @@ The repository is split into a few main structures by example type:
 - [MemoryAndStructureExmaples](./MemoryAndStructureExamples/) - examples related to ways to allocate memory, launch kernels, or structure code to be beneificial for use with CUDA. These can and will leverage code / kernel samples, but their theme will be more around "good ways to do things" or "considerations" when writing CUDA programs.
 - [KernelAndLibExamples](./KernelAndLibExamples/) - kernels, core libraries, thrust, etc. Just general examples of how to actually load and process data on the GPU.
 - [ProfilingExamples](./ProfilingExamples/) - examples to profile or benchmark CUDA code.
+- [PerformanceChecklist](./PerformanceChecklistExamples/) - examples which cover the standard CUDA performance checklist.
 
 ## Contributing
 I love contributions because I get to learn from you and the project grows to help more people. With that in mind, contributions should meet the following characteristics:
