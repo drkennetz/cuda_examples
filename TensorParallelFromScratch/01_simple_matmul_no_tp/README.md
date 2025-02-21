@@ -2,6 +2,7 @@
 
 For the full writeup, visit:
 
+[The substack](https://open.substack.com/pub/dkennetz/p/tensor-parallelism-with-cuda-matrix?r=2ay1dx&utm_campaign=post&utm_medium=web&showWelcomeOnShare=true)
 
 ## To build and run from here:
 ```bash
