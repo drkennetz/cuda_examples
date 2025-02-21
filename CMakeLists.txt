@@ -27,6 +27,7 @@ ConfigureCUDAExample(alloc_init_vs_alloc_uninit MemoryAndStructureExamples/alloc
 ConfigureCUDAExample(pinned_vs_pageable MemoryAndStructureExamples/pinned_vs_pageable/pinned_vs_pageable.cu)
 ConfigureCUDAExample(bank_conflicts ProfilingExamples/memory_bank_conflict/bank_conflict.cu)
 ConfigureCUDAExample(global_vs_shared ProfilingExamples/global_vs_shared_mem/global_vs_shared.cu)
+ConfigureCUDAExample(matmul TensorParallelFromScratch/01_simple_matmul_no_tp/matmul.cu)
 
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/ProfilingExamples/nvtx/make_run_and_profile.sh
