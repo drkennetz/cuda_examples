@@ -10,6 +10,7 @@ The repository is split into a few main structures by example type:
 - [KernelAndLibExamples](./KernelAndLibExamples/) - kernels, core libraries, thrust, etc. Just general examples of how to actually load and process data on the GPU.
 - [ProfilingExamples](./ProfilingExamples/) - examples to profile or benchmark CUDA code.
 - [PerformanceChecklist](./PerformanceChecklistExamples/) - examples which cover the standard CUDA performance checklist.
+- [TensorParallelFromScratch](./TensorParallelFromScratch/) - follows my blog series on implementing tensor parallelism in CUDA from scratch!
 
 ## Contributing
 I love contributions because I get to learn from you and the project grows to help more people. With that in mind, contributions should meet the following characteristics:
