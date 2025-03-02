@@ -20,7 +20,6 @@ __global__ void matMulKernelTP(int *A, int *B, int *C, int m, int n, int k, int 
         for (int i = 0; i < k; i++) {
             value += A[row * k + i] * B[i * n + col];
         }
-        //C[row * n + col] = value;  // Fixed: Use full matrix width 'n' as stride
         C[row * col_size + local_col] = value;
     }
 }
@@ -131,7 +130,6 @@ int main() {
         float gpu_time = 0;
         cudaCheckError(::cudaEventElapsedTime(&gpu_time, startEvents[gpu], stopEvents[gpu]));
         std::cout << "GPU " << gpu << " execution time: " << gpu_time << "ms" << std::endl;
-        //printf("GPU %d execution time: %.2f ms\n", gpu, gpu_time);
     }
 
     for (int gpu = 0; gpu < NGPUS; gpu++) {
