@@ -36,16 +36,16 @@ int main() {
     
     // Set up each GPU
     for (int gpu = 0; gpu < 2; gpu++) {
-        cudaCheckError(cudaSetDevice(gpu));
+        cudaCheckError(::cudaSetDevice(gpu));
         
         // Allocate memory on current GPU
-        cudaCheckError(cudaMalloc(&d_A[gpu], M * K * sizeof(int)));
-        cudaCheckError(cudaMalloc(&d_B[gpu], K * N * sizeof(int)));
-        cudaCheckError(cudaMalloc(&d_C[gpu], M * cols_per_gpu * sizeof(int)));
+        cudaCheckError(::cudaMalloc(&d_A[gpu], M * K * sizeof(int)));
+        cudaCheckError(::cudaMalloc(&d_B[gpu], K * N * sizeof(int)));
+        cudaCheckError(::cudaMalloc(&d_C[gpu], M * cols_per_gpu * sizeof(int)));
         
         // Copy input matrices to current GPU
-        cudaCheckError(cudaMemcpy(d_A[gpu], A, M * K * sizeof(int), cudaMemcpyHostToDevice));
-        cudaCheckError(cudaMemcpy(d_B[gpu], B, K * N * sizeof(int), cudaMemcpyHostToDevice));
+        cudaCheckError(::cudaMemcpy(d_A[gpu], A, M * K * sizeof(int), cudaMemcpyHostToDevice));
+        cudaCheckError(::cudaMemcpy(d_B[gpu], B, K * N * sizeof(int), cudaMemcpyHostToDevice));
         
         // Set grid and block dimensions for this GPU's portion
         dim3 threadsPerBlock(cols_per_gpu, M);
@@ -64,10 +64,10 @@ int main() {
     
     // Copy results back from each GPU and combine
     for (int gpu = 0; gpu < 2; gpu++) {
-        cudaCheckError(cudaSetDevice(gpu));
+        cudaCheckError(::cudaSetDevice(gpu));
         // Copy each row's portion separately to maintain correct layout
         for (int row = 0; row < M; row++) {
-            cudaCheckError(cudaMemcpy(
+            cudaCheckError(::cudaMemcpy(
                 &C[row][gpu * cols_per_gpu],         // Destination in host matrix
                 &d_C[gpu][row * cols_per_gpu],       // Source from GPU
                 cols_per_gpu * sizeof(int),          // Size of this GPU's portion
@@ -87,10 +87,10 @@ int main() {
     
     // Free device memory on each GPU
     for (int gpu = 0; gpu < 2; gpu++) {
-        cudaCheckError(cudaSetDevice(gpu));
-        cudaCheckError(cudaFree(d_A[gpu]));
-        cudaCheckError(cudaFree(d_B[gpu]));
-        cudaCheckError(cudaFree(d_C[gpu]));
+        cudaCheckError(::cudaSetDevice(gpu));
+        cudaCheckError(::cudaFree(d_A[gpu]));
+        cudaCheckError(::cudaFree(d_B[gpu]));
+        cudaCheckError(::cudaFree(d_C[gpu]));
     }
     
     return 0;

@@ -4,13 +4,10 @@
 
 #include "../../utils/utils.cuh"
 
-//#define M 1024  // Rows of A, Rows of C
-//#define N 2048  // Columns of B, Columns of C
-//#define K 512   // Columns of A, Rows of B
-
 #define M 4096  // Rows of A, Rows of C
 #define N 8192  // Columns of B, Columns of C
 #define K 1024  // Columns of A, Rows of B
+#define NGPUS 2 // Number of GPUs to use for computation
 
 // Kernel to perform matrix multiplication on a portion of the matrices
 __global__ void matMulKernelTP(int *A, int *B, int *C, int m, int n, int k, int col_start, int col_size) {
@@ -42,6 +39,7 @@ void matMulHost(const int* A, const int* B, int* C, int m, int n, int k) {
 }
 
 int main() {
+    auto total_start = std::chrono::high_resolution_clock::now();
     // Host matrices
     int *A = new int[M * K];
     int *B = new int[K * N];
@@ -62,70 +60,85 @@ int main() {
     }
 
     // Calculate split for tensor parallelism across N dimension
-    int cols_per_gpu = N / 2;
+    const int cols_per_gpu = N / NGPUS;
     
     // Arrays for each GPU
-    int *d_A[2], *d_B[2], *d_C[2];
-    
-    // Create CUDA events for timing
-    cudaEvent_t start, stop;
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
-    
-    // Start GPU timing
-    cudaEventRecord(start);
-    
+    int *d_A[NGPUS], *d_B[NGPUS], *d_C[NGPUS];
+
+    // Create streams and events per GPU
+    cudaStream_t streams[NGPUS];
+    cudaEvent_t startEvents[NGPUS], stopEvents[NGPUS];
+
+    for (int gpu = 0; gpu < NGPUS; gpu++) {
+        cudaCheckError(::cudaSetDevice(gpu));
+        cudaCheckError(::cudaStreamCreate(&streams[gpu]));
+        cudaCheckError(::cudaEventCreate(&startEvents[gpu]));
+        cudaCheckError(::cudaEventCreate(&stopEvents[gpu]));
+    }
+
     // Set up each GPU
-    for (int gpu = 0; gpu < 2; gpu++) {
-        cudaCheckError(cudaSetDevice(gpu));
+    for (int gpu = 0; gpu < NGPUS; gpu++) {
+        cudaCheckError(::cudaSetDevice(gpu));
         
         // Allocate memory on current GPU
-        cudaCheckError(cudaMalloc(&d_A[gpu], M * K * sizeof(int)));
-        cudaCheckError(cudaMalloc(&d_B[gpu], K * N * sizeof(int)));
-        cudaCheckError(cudaMalloc(&d_C[gpu], M * cols_per_gpu * sizeof(int)));
+        cudaCheckError(::cudaMalloc(&d_A[gpu], M * K * sizeof(int)));
+        cudaCheckError(::cudaMalloc(&d_B[gpu], K * N * sizeof(int)));
+        cudaCheckError(::cudaMalloc(&d_C[gpu], M * cols_per_gpu * sizeof(int)));
         
         // Copy input matrices to current GPU
-        cudaCheckError(cudaMemcpy(d_A[gpu], A, M * K * sizeof(int), cudaMemcpyHostToDevice));
-        cudaCheckError(cudaMemcpy(d_B[gpu], B, K * N * sizeof(int), cudaMemcpyHostToDevice));
+        cudaCheckError(::cudaMemcpyAsync(d_A[gpu], A, M * K * sizeof(int), cudaMemcpyHostToDevice, streams[gpu]));
+        cudaCheckError(::cudaMemcpyAsync(d_B[gpu], B, K * N * sizeof(int), cudaMemcpyHostToDevice, streams[gpu]));
         
         // Set grid and block dimensions for this GPU's portion
-        dim3 threadsPerBlock(16, 16);  // Using 16x16 thread blocks for better occupancy
-        dim3 numBlocks(
+        const dim3 threadsPerBlock(16, 16);  // Using 16x16 thread blocks for better occupancy
+        const dim3 numBlocks(
             (cols_per_gpu + threadsPerBlock.x - 1) / threadsPerBlock.x,
             (M + threadsPerBlock.y - 1) / threadsPerBlock.y
         );
         
-        // Launch kernel for this GPU's portion
-        int col_start = gpu * cols_per_gpu;
-        matMulKernelTP<<<numBlocks, threadsPerBlock>>>(
+        const int col_start = gpu * cols_per_gpu;
+
+        cudaCheckError(::cudaEventRecord(startEvents[gpu], streams[gpu]));
+
+        matMulKernelTP<<<numBlocks, threadsPerBlock, 0, streams[gpu]>>>(
             d_A[gpu], d_B[gpu], d_C[gpu],
             M, N, K, col_start, cols_per_gpu
         );
+
+        // Record stop event for this GPU
+        cudaCheckError(::cudaEventRecord(stopEvents[gpu], streams[gpu]));
     }
     
     // Copy results back from each GPU and combine
-    for (int gpu = 0; gpu < 2; gpu++) {
-        cudaCheckError(cudaSetDevice(gpu));
+    for (int gpu = 0; gpu < NGPUS; gpu++) {
+        cudaCheckError(::cudaSetDevice(gpu));
         // Copy each row's portion separately to maintain correct layout
         for (int row = 0; row < M; row++) {
-            cudaCheckError(cudaMemcpy(
+            cudaCheckError(::cudaMemcpyAsync(
                 &C[row * N + gpu * cols_per_gpu],    // Destination in host matrix
                 &d_C[gpu][row * cols_per_gpu],       // Source from GPU
                 cols_per_gpu * sizeof(int),          // Size of this GPU's portion
-                cudaMemcpyDeviceToHost
+                cudaMemcpyDeviceToHost,
+                streams[gpu]
             ));
         }
+        // Ensure all work in stream is completed before measuring timing.
+        cudaCheckError(::cudaStreamSynchronize(streams[gpu]));
     }
 
-    // Stop GPU timing
-    cudaEventRecord(stop);
-    cudaEventSynchronize(stop);
-    float gpu_milliseconds = 0;
-    cudaEventElapsedTime(&gpu_milliseconds, start, stop);
-    
-    // Clean up events
-    cudaEventDestroy(start);
-    cudaEventDestroy(stop);
+    // Elapsed time per GPU.
+    for (int gpu = 0; gpu < NGPUS; ++gpu) {
+        float gpu_time = 0;
+        cudaCheckError(::cudaEventElapsedTime(&gpu_time, startEvents[gpu], stopEvents[gpu]));
+        std::cout << "GPU " << gpu << " execution time: " << gpu_time << "ms" << std::endl;
+        //printf("GPU %d execution time: %.2f ms\n", gpu, gpu_time);
+    }
+
+    for (int gpu = 0; gpu < NGPUS; gpu++) {
+        cudaCheckError(::cudaEventDestroy(startEvents[gpu]));
+        cudaCheckError(::cudaEventDestroy(stopEvents[gpu]));
+        cudaCheckError(::cudaStreamDestroy(streams[gpu]));
+    }
 
     // Start CPU timing
     auto cpu_start = std::chrono::high_resolution_clock::now();
@@ -140,9 +153,7 @@ int main() {
     
     // Print timing results
     std::cout << "\nTiming Results:" << std::endl;
-    std::cout << "GPU Time: " << gpu_milliseconds << " ms" << std::endl;
     std::cout << "CPU Time: " << cpu_duration.count() << " ms" << std::endl;
-    std::cout << "Speedup: " << static_cast<float>(cpu_duration.count()) / gpu_milliseconds << "x" << std::endl;
     
     // Compare results
     bool match = true;
@@ -188,11 +199,11 @@ int main() {
     print_region("Bottom-right corner", M - 4, N - 4);
     
     // Free device memory on each GPU
-    for (int gpu = 0; gpu < 2; gpu++) {
-        cudaCheckError(cudaSetDevice(gpu));
-        cudaCheckError(cudaFree(d_A[gpu]));
-        cudaCheckError(cudaFree(d_B[gpu]));
-        cudaCheckError(cudaFree(d_C[gpu]));
+    for (int gpu = 0; gpu < NGPUS; gpu++) {
+        cudaCheckError(::cudaSetDevice(gpu));
+        cudaCheckError(::cudaFree(d_A[gpu]));
+        cudaCheckError(::cudaFree(d_B[gpu]));
+        cudaCheckError(::cudaFree(d_C[gpu]));
     }
 
     // Free host memory
@@ -201,5 +212,9 @@ int main() {
     delete[] C;
     delete[] C_host;
     
+    auto total_end = std::chrono::high_resolution_clock::now();
+    auto total_duration = std::chrono::duration_cast<std::chrono::milliseconds>(total_end - total_start);
+    
+    std::cout << "Total Time: " << cpu_duration.count() << " ms" << std::endl;
     return 0;
 }
