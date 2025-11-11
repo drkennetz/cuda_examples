@@ -30,6 +30,8 @@ ConfigureCUDAExample(global_vs_shared ProfilingExamples/global_vs_shared_mem/glo
 ConfigureCUDAExample(matmul TensorParallelFromScratch/01_simple_matmul_no_tp/matmul.cu)
 ConfigureCUDAExample(tp_matmul_small TensorParallelFromScratch/02_matmul_tp/matmul_tp_small.cu)
 ConfigureCUDAExample(tp_matmul_big TensorParallelFromScratch/02_matmul_tp/matmul_tp_big.cu)
+# Note: nccl_vs_nixl builds baseline only. Use the Makefile for NCCL/NIXL support.
+ConfigureCUDAExample(nccl_vs_nixl TensorParallelFromScratch/03_nccl_vs_nixl/nixl_vs_nccl.cu)
 
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/ProfilingExamples/nvtx/make_run_and_profile.sh
