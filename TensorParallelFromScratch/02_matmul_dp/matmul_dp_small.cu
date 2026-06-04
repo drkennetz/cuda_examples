@@ -8,7 +8,7 @@
 #define K 3  // Columns of A, Rows of B
 
 // Kernel to perform matrix multiplication on a portion of the matrices
-__global__ void matMulKernelTP(int *A, int *B, int *C, int m, int n, int k, int col_start, int col_size) {
+__global__ void matMulKernelDP(int *A, int *B, int *C, int m, int n, int k, int col_start, int col_size) {
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int local_col = blockIdx.x * blockDim.x + threadIdx.x;
     int col = col_start + local_col;
@@ -28,7 +28,7 @@ int main() {
     int B[K][N] = { {100, 200}, {300, 400}, {500, 600} };
     int C[M][N] = {0};
 
-    // Calculate split for tensor parallelism across N dimension
+    // Calculate split for data parallelism across N dimension
     int cols_per_gpu = N / 2;
     
     // Arrays for each GPU
@@ -56,7 +56,7 @@ int main() {
         
         // Launch kernel for this GPU's portion
         int col_start = gpu * cols_per_gpu;
-        matMulKernelTP<<<numBlocks, threadsPerBlock>>>(
+        matMulKernelDP<<<numBlocks, threadsPerBlock>>>(
             d_A[gpu], d_B[gpu], d_C[gpu],
             M, N, K, col_start, cols_per_gpu
         );
