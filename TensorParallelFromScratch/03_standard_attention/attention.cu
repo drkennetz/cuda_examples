@@ -29,6 +29,7 @@
 #include <cstdlib>
 #include <vector>
 #include <chrono>
+#include <algorithm>
 
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>
@@ -64,6 +65,7 @@ __global__ void qkKernel(const __half* __restrict__ Q,
 //   One thread block handles one row of length N. We do the numerically stable
 //   softmax: subtract the row max before exp, then divide by the row sum.
 //   Shared-memory parallel reductions are used for both the max and the sum.
+//   NOTE: the reductions assume blockDim.x is a power of two.
 // ---------------------------------------------------------------------------
 __global__ void softmaxKernel(const __half* __restrict__ S,
                               __half* __restrict__ P,
@@ -91,7 +93,7 @@ __global__ void softmaxKernel(const __half* __restrict__ S,
     // --- row sum of exp(s - max) ---
     float local_sum = 0.0f;
     for (int col = tid; col < n; col += nthreads) {
-        local_sum += __expf(__half2float(S[row * n + col]) - row_max);
+        local_sum += expf(__half2float(S[row * n + col]) - row_max);
     }
     sdata[tid] = local_sum;
     __syncthreads();
@@ -105,7 +107,7 @@ __global__ void softmaxKernel(const __half* __restrict__ S,
 
     // --- normalize ---
     for (int col = tid; col < n; col += nthreads) {
-        float p = __expf(__half2float(S[row * n + col]) - row_max) * inv_sum;
+        float p = expf(__half2float(S[row * n + col]) - row_max) * inv_sum;
         P[row * n + col] = __float2half(p);
     }
 }
@@ -132,35 +134,40 @@ __global__ void pvKernel(const __half* __restrict__ P,
 }
 
 // ---------------------------------------------------------------------------
-// CPU reference (FP32) computed from the same FP16 inputs, for verification.
+// CPU reference computed from the same FP16 inputs, for verification.
+//
+// The reductions accumulate in FP32 (like the GPU), and we ALSO round the
+// intermediates S, P and O to FP16 exactly where the GPU materializes them in
+// HBM. That makes the only remaining source of disagreement the order of the
+// summations (which is not associative in floating point), so a failure points
+// at a real indexing/math bug rather than at expected precision differences.
 // ---------------------------------------------------------------------------
 void attentionHost(const std::vector<float>& Q,
                    const std::vector<float>& K,
                    const std::vector<float>& V,
                    std::vector<float>& O,
                    int n, int d, float scale) {
+    auto h = [](float x) { return __half2float(__float2half(x)); };  // FP16 round-trip
     std::vector<float> S(n * n);
     for (int i = 0; i < n; i++) {
-        // S row + stable softmax
+        // S row (stored FP16 on the GPU) + stable softmax
         float row_max = -INFINITY;
         for (int j = 0; j < n; j++) {
             float acc = 0.0f;
             for (int k = 0; k < d; k++) acc += Q[i * d + k] * K[j * d + k];
-            S[i * n + j] = acc * scale;
+            S[i * n + j] = h(acc * scale);
             row_max = std::fmax(row_max, S[i * n + j]);
         }
         float row_sum = 0.0f;
-        for (int j = 0; j < n; j++) {
-            float e = std::exp(S[i * n + j] - row_max);
-            S[i * n + j] = e;
-            row_sum += e;
-        }
-        for (int j = 0; j < n; j++) S[i * n + j] /= row_sum;
-        // O row = P row . V
+        for (int j = 0; j < n; j++) row_sum += std::exp(S[i * n + j] - row_max);
+        float inv_sum = 1.0f / row_sum;
+        for (int j = 0; j < n; j++)
+            S[i * n + j] = h(std::exp(S[i * n + j] - row_max) * inv_sum);  // P stored FP16
+        // O row = P row . V  (O stored FP16 on the GPU)
         for (int k = 0; k < d; k++) {
             float acc = 0.0f;
             for (int j = 0; j < n; j++) acc += S[i * n + j] * V[j * d + k];
-            O[i * d + k] = acc;
+            O[i * d + k] = h(acc);
         }
     }
 }
@@ -179,7 +186,14 @@ int main() {
     auto rnd = [] { return (static_cast<float>(std::rand()) / RAND_MAX - 0.5f) * 0.2f; };
     for (int i = 0; i < N * D; i++) { hQ[i] = rnd(); hK[i] = rnd(); hV[i] = rnd(); }
 
-    std::vector<__half> hQ16(N * D), hK16(N * D), hV16(N * D);
+    // FP16 device-input copies live in PINNED (page-locked) host memory, so the
+    // H2D transfers below run at full PCIe/NVLink bandwidth (and would be truly
+    // async if issued on a stream). The FP32 buffers above are CPU-reference-only
+    // and never cross the bus, so they stay pageable.
+    __half *hQ16, *hK16, *hV16;
+    cudaCheckError(::cudaMallocHost(&hQ16, N * D * sizeof(__half)));
+    cudaCheckError(::cudaMallocHost(&hK16, N * D * sizeof(__half)));
+    cudaCheckError(::cudaMallocHost(&hV16, N * D * sizeof(__half)));
     for (int i = 0; i < N * D; i++) {
         hQ16[i] = __float2half(hQ[i]);
         hK16[i] = __float2half(hK[i]);
@@ -202,9 +216,9 @@ int main() {
     cudaCheckError(::cudaMalloc(&dP, (size_t)N * N * sizeof(__half)));
     cudaCheckError(::cudaMalloc(&dO, N * D * sizeof(__half)));
 
-    cudaCheckError(::cudaMemcpy(dQ, hQ16.data(), N * D * sizeof(__half), cudaMemcpyHostToDevice));
-    cudaCheckError(::cudaMemcpy(dK, hK16.data(), N * D * sizeof(__half), cudaMemcpyHostToDevice));
-    cudaCheckError(::cudaMemcpy(dV, hV16.data(), N * D * sizeof(__half), cudaMemcpyHostToDevice));
+    cudaCheckError(::cudaMemcpy(dQ, hQ16, N * D * sizeof(__half), cudaMemcpyHostToDevice));
+    cudaCheckError(::cudaMemcpy(dK, hK16, N * D * sizeof(__half), cudaMemcpyHostToDevice));
+    cudaCheckError(::cudaMemcpy(dV, hV16, N * D * sizeof(__half), cudaMemcpyHostToDevice));
 
     cudaEvent_t e0, e1, e2, e3;
     cudaCheckError(::cudaEventCreate(&e0));
@@ -220,7 +234,7 @@ int main() {
     cudaCheckError(::cudaGetLastError());
 
     // --- Pass 2: P = softmax(S) ---
-    int sm_threads = 256;
+    int sm_threads = 256;  // power of two -- required by softmaxKernel's reduction
     cudaCheckError(::cudaEventRecord(e1));
     softmaxKernel<<<N, sm_threads, sm_threads * sizeof(float)>>>(dS, dP, N);
     cudaCheckError(::cudaGetLastError());
@@ -239,8 +253,9 @@ int main() {
     cudaCheckError(::cudaEventElapsedTime(&t_sm, e1, e2));
     cudaCheckError(::cudaEventElapsedTime(&t_pv, e2, e3));
 
-    std::vector<__half> hO16(N * D);
-    cudaCheckError(::cudaMemcpy(hO16.data(), dO, N * D * sizeof(__half), cudaMemcpyDeviceToHost));
+    __half *hO16;
+    cudaCheckError(::cudaMallocHost(&hO16, N * D * sizeof(__half)));
+    cudaCheckError(::cudaMemcpy(hO16, dO, N * D * sizeof(__half), cudaMemcpyDeviceToHost));
 
     std::cout << "GPU phase timings:\n";
     std::cout << "  Pass 1  S = QK^T/sqrt(d) : " << t_qk << " ms\n";
@@ -281,6 +296,10 @@ int main() {
     cudaCheckError(::cudaFree(dS));
     cudaCheckError(::cudaFree(dP));
     cudaCheckError(::cudaFree(dO));
+    cudaCheckError(::cudaFreeHost(hQ16));
+    cudaCheckError(::cudaFreeHost(hK16));
+    cudaCheckError(::cudaFreeHost(hV16));
+    cudaCheckError(::cudaFreeHost(hO16));
 
     return (max_abs < tol) ? 0 : 1;
 }

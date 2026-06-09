@@ -62,14 +62,19 @@ We follow the literal three-pass HBM algorithm:
 
 Configuration (single head): `N = 4096`, `d = 128`, **FP16** storage with **FP32
 accumulation**. Every value in HBM is 2 bytes, but the dot products and the
-softmax sums accumulate in 32-bit registers — standard practice that keeps the
-result within `~1e-6` of the FP32 CPU reference while halving memory.
+softmax sums accumulate in 32-bit registers — standard practice that halves
+memory while staying numerically sane. We verify against an FP32 CPU reference
+using a tolerance: because the GPU materializes `S`, `P` and `O` in FP16 and the
+parallel reductions sum in a different order than the CPU, exact agreement isn't
+expected (the reference here rounds its intermediates to FP16 the same way the
+GPU does, so the residual is just summation order).
 
-Note the cost of being naive: `S` and `P` are each `4096×4096×2B = 32 MiB`, so we
-write and then re-read **64 MiB of intermediates** that never needed to exist.
-For real sequence lengths this is the whole problem — the score matrix grows as
-`N²`. At `N = 8192` it's 128 MiB per matrix; at `N = 32k` it's 2 GiB. This is the
-quadratic-memory wall.
+Note the cost of being naive: `S` and `P` are each `4096×4096×2B = 32 MiB`
+(64 MiB together at `N = 4096`). The naive path **writes `S`, reads `S`, writes
+`P`, then reads `P`**, so those two intermediates alone account for at least
+128 MiB of HBM traffic that never needed to exist. For real sequence lengths this
+is the whole problem — the score matrix grows as `N²`. At `N = 8192` it's 128 MiB
+per matrix; at `N = 32k` it's 2 GiB. This is the quadratic-memory wall.
 
 ## Build and run
 
