@@ -10,7 +10,7 @@
 #define NGPUS 2 // Number of GPUs to use for computation
 
 // Kernel to perform matrix multiplication on a portion of the matrices
-__global__ void matMulKernelTP(int *A, int *B, int *C, int m, int n, int k, int col_start, int col_size) {
+__global__ void matMulKernelDP(int *A, int *B, int *C, int m, int n, int k, int col_start, int col_size) {
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int local_col = blockIdx.x * blockDim.x + threadIdx.x;
     int col = col_start + local_col;
@@ -58,7 +58,7 @@ int main() {
         }
     }
 
-    // Calculate split for tensor parallelism across N dimension
+    // Calculate split for data parallelism across N dimension
     const int cols_per_gpu = N / NGPUS;
     
     // Arrays for each GPU
@@ -99,7 +99,7 @@ int main() {
 
         cudaCheckError(::cudaEventRecord(startEvents[gpu], streams[gpu]));
 
-        matMulKernelTP<<<numBlocks, threadsPerBlock, 0, streams[gpu]>>>(
+        matMulKernelDP<<<numBlocks, threadsPerBlock, 0, streams[gpu]>>>(
             d_A[gpu], d_B[gpu], d_C[gpu],
             M, N, K, col_start, cols_per_gpu
         );
